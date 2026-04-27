@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>End-to-End IoT System — LoRa · LoRaWAN · MQTT</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #050a12;
+  --bg2: #090f1a;
+  --bg3: #0d1424;
+  --lora: #00e5ff;
+  --lorawan: #ff9d00;
+  --mqtt: #39ff6e;
+  --alert: #ff3d6e;
+  --text: #c8ddf5;
+  --muted: #4a6280;
+  --border: rgba(0,229,255,0.12);
+  --glow-lora: 0 0 20px rgba(0,229,255,0.4);
+  --glow-mqtt: 0 0 20px rgba(57,255,110,0.4);
+  --glow-lorawan: 0 0 20px rgba(255,157,0,0.4);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow-x:hidden}
+
+/* NOISE OVERLAY */
+body::before{
+  content:'';position:fixed;top:0;left:0;width:100%;height:100%;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;opacity:0.4;
+}
+
+/* GRID BG */
+body::after{
+  content:'';position:fixed;top:0;left:0;width:100%;height:100%;
+  background-image:linear-gradient(rgba(0,229,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,0.03) 1px,transparent 1px);
+  background-size:60px 60px;pointer-events:none;z-index:0;
+}
+
+section,nav,header{position:relative;z-index:1}
+
+/* NAV */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 40px;
+  background:rgba(5,10,18,0.85);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+}
+.nav-logo{
+  font-family:'Orbitron',monospace;font-weight:900;font-size:13px;letter-spacing:3px;
+  color:var(--lora);text-shadow:var(--glow-lora);
+}
+.nav-links{display:flex;gap:28px;list-style:none}
+.nav-links a{
+  font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:2px;
+  color:var(--muted);text-decoration:none;transition:color 0.3s;text-transform:uppercase;
+}
+.nav-links a:hover{color:var(--lora)}
+
+/* HERO */
+header{
+  min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  padding:120px 40px 80px;text-align:center;
+  background:radial-gradient(ellipse 80% 60% at 50% 40%, rgba(0,229,255,0.06) 0%, transparent 70%);
+}
+.hero-tag{
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:4px;
+  color:var(--lora);margin-bottom:20px;opacity:0;animation:fadeUp 0.8s 0.3s forwards;
+}
+.hero-title{
+  font-family:'Orbitron',monospace;font-weight:900;
+  font-size:clamp(32px,5vw,72px);line-height:1.05;
+  margin-bottom:20px;opacity:0;animation:fadeUp 0.8s 0.5s forwards;
+}
+.hero-title span.lora{color:var(--lora);text-shadow:var(--glow-lora)}
+.hero-title span.lorawan{color:var(--lorawan);text-shadow:var(--glow-lorawan)}
+.hero-title span.mqtt{color:var(--mqtt);text-shadow:var(--glow-mqtt)}
+.hero-sub{
+  max-width:600px;font-size:16px;line-height:1.7;color:var(--muted);
+  margin-bottom:40px;font-weight:300;opacity:0;animation:fadeUp 0.8s 0.7s forwards;
+}
+.hero-badges{
+  display:flex;gap:12px;flex-wrap:wrap;justify-content:center;
+  margin-bottom:50px;opacity:0;animation:fadeUp 0.8s 0.9s forwards;
+}
+.badge{
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:2px;
+  padding:6px 14px;border-radius:2px;
+}
+.badge-lora{border:1px solid var(--lora);color:var(--lora)}
+.badge-lorawan{border:1px solid var(--lorawan);color:var(--lorawan)}
+.badge-mqtt{border:1px solid var(--mqtt);color:var(--mqtt)}
+.hero-scroll{
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--muted);
+  opacity:0;animation:fadeUp 0.8s 1.1s forwards, pulse 2s 2s infinite;
+}
+
+/* PULSE ANIMATION FOR LIVE DOT */
+@keyframes pulseDot{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:0.4;transform:scale(0.7)}
+}
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(30px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes pulse{
+  0%,100%{opacity:0.4}50%{opacity:0.9}
+}
+@keyframes flow{
+  0%{transform:translateX(-100%);opacity:0}
+  10%{opacity:1}
+  90%{opacity:1}
+  100%{transform:translateX(800%);opacity:0}
+}
+@keyframes scanline{
+  0%{top:-10%}100%{top:110%}
+}
+@keyframes blink{
+  0%,100%{opacity:1}50%{opacity:0}
+}
+
+/* SECTION COMMONS */
+.section{padding:100px 40px}
+.section-header{margin-bottom:60px;text-align:center}
+.section-tag{
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:4px;
+  color:var(--muted);margin-bottom:12px;
+}
+.section-title{
+  font-family:'Orbitron',monospace;font-weight:600;
+  font-size:clamp(22px,3vw,36px);
+}
+.container{max-width:1200px;margin:0 auto}
+
+/* ARCHITECTURE */
+#architecture{background:var(--bg2)}
+.arch-diagram{
+  background:var(--bg3);border:1px solid var(--border);border-radius:4px;
+  padding:40px;overflow:hidden;position:relative;
+}
+.arch-diagram::after{
+  content:'';position:absolute;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--lora),transparent);
+  animation:scanline 4s linear infinite;top:-10%;
+}
+.arch-row{
+  display:flex;align-items:center;justify-content:center;
+  gap:0;margin-bottom:0;flex-wrap:wrap;
+}
+.arch-nodes{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:16px;margin-bottom:24px;
+}
+.arch-node{
+  background:rgba(0,0,0,0.4);border:1px solid var(--border);
+  border-radius:4px;padding:16px 12px;text-align:center;
+  cursor:pointer;transition:all 0.3s;position:relative;overflow:hidden;
+}
+.arch-node:hover,.arch-node.active{
+  border-color:var(--lora);box-shadow:var(--glow-lora);
+}
+.arch-node::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(0,229,255,0.06),transparent);
+  opacity:0;transition:0.3s;
+}
+.arch-node:hover::before,.arch-node.active::before{opacity:1}
+.node-icon{font-size:28px;margin-bottom:8px}
+.node-label{
+  font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;
+  color:var(--lora);margin-bottom:4px;
+}
+.node-desc{font-size:11px;color:var(--muted);line-height:1.5}
+
+.arch-arrow{
+  display:flex;flex-direction:column;align-items:center;
+  margin:0 0 24px;
+}
+.arrow-label{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:2px;margin-bottom:6px}
+.arrow-line{
+  width:3px;height:40px;background:linear-gradient(var(--lora),var(--lorawan));
+  position:relative;margin:0 auto;
+}
+.arrow-line::after{
+  content:'▼';position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);
+  color:var(--lorawan);font-size:14px;
+}
+.packet-flow{
+  height:4px;background:var(--bg3);border-radius:2px;
+  margin:0 auto 30px;max-width:700px;overflow:hidden;position:relative;
+}
+.packet{
+  position:absolute;top:0;height:4px;width:40px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--lora),transparent);
+  animation:flow 3s linear infinite;
+}
+.packet:nth-child(2){animation-delay:1s;background:linear-gradient(90deg,transparent,var(--lorawan),transparent)}
+.packet:nth-child(3){animation-delay:2s;background:linear-gradient(90deg,transparent,var(--mqtt),transparent)}
+
+.node-detail{
+  background:rgba(0,0,0,0.6);border:1px solid var(--border);border-radius:4px;
+  padding:24px;margin-top:20px;display:none;
+}
+.node-detail.show{display:block;animation:fadeUp 0.3s forwards}
+.node-detail h4{
+  font-family:'Orbitron',monospace;font-size:13px;color:var(--lora);margin-bottom:12px;letter-spacing:2px;
+}
+.node-detail p{font-size:14px;color:var(--text);line-height:1.7}
+
+/* OSI LAYERS */
+#osi{}
+.osi-grid{display:grid;grid-template-columns:1fr;gap:0;border:1px solid var(--border)}
+.osi-layer{
+  display:grid;grid-template-columns:80px 160px 1fr;
+  border-bottom:1px solid var(--border);cursor:pointer;
+  transition:background 0.3s;
+  background:var(--bg2);
+}
+.osi-layer:last-child{border-bottom:none}
+.osi-layer:hover,.osi-layer.active{background:rgba(0,229,255,0.04)}
+.osi-num{
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Orbitron',monospace;font-weight:900;font-size:28px;
+  color:rgba(0,229,255,0.15);border-right:1px solid var(--border);
+  padding:20px;
+}
+.osi-layer.active .osi-num{color:var(--lora)}
+.osi-name{
+  display:flex;flex-direction:column;justify-content:center;
+  padding:20px 16px;border-right:1px solid var(--border);
+}
+.osi-name strong{
+  font-family:'Orbitron',monospace;font-size:11px;letter-spacing:1px;
+  color:var(--text);
+}
+.osi-proto{
+  font-family:'Share Tech Mono',monospace;font-size:10px;
+  margin-top:4px;padding:2px 8px;border-radius:2px;
+  display:inline-block;width:fit-content;
+}
+.proto-lora{background:rgba(0,229,255,0.15);color:var(--lora)}
+.proto-lorawan{background:rgba(255,157,0,0.15);color:var(--lorawan)}
+.proto-mqtt{background:rgba(57,255,110,0.15);color:var(--mqtt)}
+.proto-ip{background:rgba(200,221,245,0.1);color:var(--muted)}
+.osi-detail{
+  padding:20px;display:flex;align-items:center;
+  font-size:13px;color:var(--muted);line-height:1.6;
+}
+.osi-expand{
+  display:none;grid-column:1/-1;padding:20px 24px 20px 260px;
+  background:rgba(0,229,255,0.03);border-top:1px solid var(--border);
+  font-size:13px;color:var(--text);line-height:1.8;
+}
+.osi-expand.show{display:block;animation:fadeUp 0.3s forwards}
+
+/* PROTOCOL TABS */
+#protocols{background:var(--bg2)}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:40px}
+.tab{
+  font-family:'Orbitron',monospace;font-size:11px;letter-spacing:2px;
+  padding:14px 28px;cursor:pointer;border-bottom:2px solid transparent;
+  transition:all 0.3s;color:var(--muted);
+}
+.tab:hover{color:var(--text)}
+.tab.active-lora{color:var(--lora);border-color:var(--lora)}
+.tab.active-lorawan{color:var(--lorawan);border-color:var(--lorawan)}
+.tab.active-mqtt{color:var(--mqtt);border-color:var(--mqtt)}
+.tab-content{display:none}
+.tab-content.active{display:grid;grid-template-columns:1fr 1fr;gap:24px;animation:fadeUp 0.4s forwards}
+.proto-card{
+  background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:24px;
+}
+.proto-card h4{
+  font-family:'Orbitron',monospace;font-size:12px;letter-spacing:2px;
+  margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);
+}
+.pro-con-list{list-style:none}
+.pro-con-list li{
+  font-size:13px;line-height:1.6;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);
+  padding-left:18px;position:relative;color:var(--text);
+}
+.pro-con-list li::before{content:'·';position:absolute;left:4px}
+.pros li::before{color:var(--mqtt)}
+.cons li::before{color:var(--alert)}
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.metric{
+  background:rgba(0,0,0,0.3);border:1px solid var(--border);
+  border-radius:3px;padding:12px;
+}
+.metric-label{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:6px}
+.metric-value{font-family:'Orbitron',monospace;font-size:18px;font-weight:600}
+.metric-value.lora{color:var(--lora)}
+.metric-value.lorawan{color:var(--lorawan)}
+.metric-value.mqtt{color:var(--mqtt)}
+.metric-unit{font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace}
+
+/* LIVE DASHBOARD */
+#dashboard{background:linear-gradient(var(--bg),var(--bg2))}
+.dash-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:20px;margin-bottom:20px}
+.dash-card{
+  background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:20px;
+  position:relative;overflow:hidden;
+}
+.dash-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--lora),transparent);
+}
+.dash-title{
+  font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:3px;
+  color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px;
+}
+.live-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--mqtt);
+  animation:pulseDot 1.5s ease-in-out infinite;
+}
+.big-value{
+  font-family:'Orbitron',monospace;font-size:48px;font-weight:900;
+  line-height:1;margin-bottom:6px;
+}
+.big-unit{font-size:16px;color:var(--muted);font-family:'Share Tech Mono',monospace}
+.small-label{font-size:12px;color:var(--muted)}
+.status-badge{
+  font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:2px;
+  padding:4px 12px;border-radius:2px;margin-top:10px;display:inline-block;
+}
+.status-ok{background:rgba(57,255,110,0.15);color:var(--mqtt);border:1px solid var(--mqtt)}
+.status-warn{background:rgba(255,157,0,0.15);color:var(--lorawan);border:1px solid var(--lorawan)}
+.status-crit{background:rgba(255,61,110,0.15);color:var(--alert);border:1px solid var(--alert)}
+
+/* CHART */
+.mini-chart{display:flex;align-items:flex-end;gap:3px;height:60px}
+.bar{
+  flex:1;border-radius:1px 1px 0 0;min-width:6px;
+  transition:height 0.5s ease;
+}
+
+/* MQTT TOPIC TREE */
+.topic-tree{font-family:'Share Tech Mono',monospace;font-size:12px;line-height:2}
+.topic-root{color:var(--mqtt)}
+.topic-branch{color:var(--lorawan);padding-left:16px}
+.topic-leaf{color:var(--lora);padding-left:32px}
+.topic-leaf span{color:var(--muted)}
+
+/* PACKET TRACKER */
+#tracker{background:var(--bg)}
+.tracker-flow{
+  display:flex;flex-direction:column;gap:0;
+  border:1px solid var(--border);border-radius:4px;overflow:hidden;
+}
+.flow-step{
+  display:grid;grid-template-columns:200px 1fr 100px;
+  border-bottom:1px solid var(--border);transition:background 0.3s;
+}
+.flow-step:last-child{border-bottom:none}
+.flow-step.active-step{background:rgba(0,229,255,0.05)}
+.step-source{
+  padding:16px 20px;border-right:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.step-icon{font-size:20px}
+.step-name{font-family:'Orbitron',monospace;font-size:10px;letter-spacing:1px;color:var(--text)}
+.step-body{padding:16px 20px;font-size:13px;color:var(--muted);line-height:1.6}
+.step-body code{
+  font-family:'Share Tech Mono',monospace;font-size:11px;
+  background:rgba(0,229,255,0.08);color:var(--lora);
+  padding:1px 6px;border-radius:2px;
+}
+.step-status{
+  padding:16px;display:flex;align-items:center;justify-content:center;
+  font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;
+}
+.step-ok{color:var(--mqtt)}
+.step-proc{color:var(--lorawan)}
+
+/* BOTTLENECKS */
+#bottlenecks{background:var(--bg2)}
+.bottleneck-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.bneck-card{
+  background:var(--bg3);border:1px solid var(--border);border-radius:4px;
+  padding:24px;position:relative;
+}
+.bneck-num{
+  font-family:'Orbitron',monospace;font-size:64px;font-weight:900;
+  position:absolute;top:16px;right:20px;color:rgba(0,229,255,0.04);line-height:1;
+}
+.bneck-card h4{
+  font-family:'Orbitron',monospace;font-size:12px;letter-spacing:2px;
+  color:var(--alert);margin-bottom:12px;
+}
+.bneck-card p{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:16px}
+.bneck-solution{
+  background:rgba(57,255,110,0.05);border:1px solid rgba(57,255,110,0.15);
+  border-radius:3px;padding:12px;
+}
+.bneck-solution-label{
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:3px;
+  color:var(--mqtt);margin-bottom:6px;
+}
+.bneck-solution p{font-size:12px;color:var(--text);margin-bottom:0}
+
+/* FOOTER */
+footer{
+  background:var(--bg);border-top:1px solid var(--border);
+  padding:40px;text-align:center;
+}
+.footer-logo{
+  font-family:'Orbitron',monospace;font-weight:900;font-size:16px;
+  color:var(--lora);text-shadow:var(--glow-lora);margin-bottom:12px;
+}
+.footer-sub{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--muted)}
+
+/* RESPONSIVE */
+@media(max-width:900px){
+  nav{padding:12px 20px}
+  .nav-links{display:none}
+  .section{padding:60px 20px}
+  .arch-nodes{grid-template-columns:1fr 1fr}
+  .tab-content.active{grid-template-columns:1fr}
+  .dash-grid{grid-template-columns:1fr 1fr}
+  .dash-grid>:first-child{grid-column:1/-1}
+  .bottleneck-grid{grid-template-columns:1fr}
+  .osi-layer{grid-template-columns:50px 120px 1fr}
+  .osi-expand{padding:16px 16px 16px 170px}
+  .flow-step{grid-template-columns:120px 1fr 70px}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">IoT // LoRa ↔ MQTT</div>
+  <ul class="nav-links">
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#osi">OSI Model</a></li>
+    <li><a href="#protocols">Protocols</a></li>
+    <li><a href="#dashboard">Dashboard</a></li>
+    <li><a href="#tracker">Data Flow</a></li>
+    <li><a href="#bottlenecks">Analysis</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<header id="top">
+  <p class="hero-tag">// Technical Report · April 2026</p>
+  <h1 class="hero-title">
+    End-to-End<br>
+    <span class="lora">LoRa</span> · <span class="lorawan">LoRaWAN</span><br>
+    &amp; <span class="mqtt">MQTT</span> System
+  </h1>
+  <p class="hero-sub">
+    A comprehensive IoT communication architecture — from chirp-modulated radio waves at the physical layer to MQTT-subscribed cloud dashboards at Layer 7.
+  </p>
+  <div class="hero-badges">
+    <span class="badge badge-lora">LoRa PHY</span>
+    <span class="badge badge-lorawan">LoRaWAN MAC</span>
+    <span class="badge badge-mqtt">MQTT Broker</span>
+    <span class="badge badge-lora">AES-128</span>
+    <span class="badge badge-lorawan">OTAA / ABP</span>
+    <span class="badge badge-mqtt">QoS 0/1/2</span>
+  </div>
+  <p class="hero-scroll">↓ SCROLL TO EXPLORE ↓</p>
+</header>
+
+<!-- ARCHITECTURE -->
+<section id="architecture" class="section">
+  <div class="container">
+    <div class="section-header">
+      <p class="section-tag">// TASK 1 — SYSTEM DESIGN</p>
+      <h2 class="section-title">System Architecture</h2>
+    </div>
+    <div class="arch-diagram">
+      <p style="font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:28px;text-align:center">
+        ↓ CLICK ANY NODE TO EXPLORE ↓
+      </p>
+
+      <div class="arch-nodes" id="archNodes">
+        <div class="arch-node" data-node="sensor" onclick="selectNode(this,'sensor')">
+          <div class="node-icon">📡</div>
+          <div class="node-label">Sensor Node</div>
+          <div class="node-desc">ESP32 + LoRa + MQ-2 / DHT11 / GPS</div>
+        </div>
+        <div class="arch-node" data-node="gateway" onclick="selectNode(this,'gateway')">
+          <div class="node-icon">🗼</div>
+          <div class="node-label">LoRa Gateway</div>
+          <div class="node-desc">LoRa → IP packet bridge</div>
+        </div>
+        <div class="arch-node" data-node="ns" onclick="selectNode(this,'ns')">
+          <div class="node-icon">🌐</div>
+          <div class="node-label">Network Server</div>
+          <div class="node-desc">ADR · De-dup · Routing</div>
+        </div>
+        <div class="arch-node" data-node="as" onclick="selectNode(this,'as')">
+          <div class="node-icon">⚙️</div>
+          <div class="node-label">App Server</div>
+          <div class="node-desc">Decrypt · Decode · JSON</div>
+        </div>
+        <div class="arch-node" data-node="broker" onclick="selectNode(this,'broker')">
+          <div class="node-icon">🔀</div>
+          <div class="node-label">MQTT Broker</div>
+          <div class="node-desc">Pub/Sub · QoS · LWT</div>
+        </div>
+        <div class="arch-node" data-node="cloud" onclick="selectNode(this,'cloud')">
+          <div class="node-icon">☁️</div>
+          <div class="node-label">Cloud / Dashboard</div>
+          <div class="node-desc">Visualize · Alert · Analyze</div>
+        </div>
+      </div>
+
+      <div class="packet-flow">
+        <div class="packet"></div>
+        <div class="packet"></div>
+        <div class="packet"></div>
+      </div>
+
+      <div class="node-detail" id="nodeDetail">
+        <h4 id="detailTitle">—</h4>
+        <p id="detailBody">—</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OSI MODEL -->
+<section id="osi" class="section">
+  <div class="container">
+    <div class="section-header">
+      <p class="section-tag">// TASK 2 — OSI LAYER ANALYSIS</p>
+      <h2 class="section-title">Layer-by-Layer Packet Tracking</h2>
+    </div>
+    <div class="osi-grid" id="osiGrid">
+      <!-- Layers injected by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- PROTOCOLS -->
+<section id="protocols" class="section">
+  <div class="container">
+    <div class="section-header">
+      <p class="section-tag">// TASKS 3-5 — PROTOCOL DEEP-DIVE</p>
+      <h2 class="section-title">Protocol Analysis</h2>
+    </div>
+    <div class="tabs">
+      <div class="tab active-lora" onclick="switchTab('lora',this)">LoRa PHY</div>
+      <div class="tab" onclick="switchTab('lorawan',this)">LoRaWAN MAC</div>
+      <div class="tab" onclick="switchTab('mqtt',this)">MQTT</div>
+    </div>
+
+    <!-- LORA TAB -->
+    <div class="tab-content active" id="tab-lora">
+      <div class="proto-card">
+        <h4 style="color:var(--lora)">Key Metrics</h4>
+        <div class="metric-grid">
+          <div class="metric">
+            <div class="metric-label">RURAL RANGE</div>
+            <div class="metric-value lora">15–20 <span class="metric-unit">km</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">URBAN RANGE</div>
+            <div class="metric-value lora">2–5 <span class="metric-unit">km</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">DATA RATE</div>
+            <div class="metric-value lora">0.3–50 <span class="metric-unit">kbps</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">FREQ BANDS</div>
+            <div class="metric-value lora">433 / 868 / 915 <span class="metric-unit">MHz</span></div>
+          </div>
+          <div class="metric" style="grid-column:1/-1">
+            <div class="metric-label">SPREADING FACTOR</div>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <div id="sfSlider" style="display:flex;gap:6px;flex:1;align-items:flex-end;height:40px"></div>
+            </div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);margin-top:6px">SF7 (fast/short) → SF12 (slow/long range)</div>
+          </div>
+        </div>
+      </div>
+      <div class="proto-card">
+        <h4 style="color:var(--lora)">Advantages</h4>
+        <ul class="pro-con-list pros">
+          <li>Long-range wireless with sub-GHz penetration</li>
+          <li>Ultra-low power — battery life measured in years</li>
+          <li>CSS modulation: immune to narrowband interference</li>
+          <li>High receiver sensitivity (down to −148 dBm)</li>
+        </ul>
+        <h4 style="color:var(--alert);margin-top:20px">Limitations</h4>
+        <ul class="pro-con-list cons">
+          <li>Low data rate — not suitable for video/audio</li>
+          <li>Half-duplex only — can't TX and RX simultaneously</li>
+          <li>Duty-cycle restrictions in unlicensed bands (~1%)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- LORAWAN TAB -->
+    <div class="tab-content" id="tab-lorawan">
+      <div class="proto-card">
+        <h4 style="color:var(--lorawan)">Device Classes</h4>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px">
+          <div style="padding:14px;background:rgba(255,157,0,0.05);border:1px solid rgba(255,157,0,0.2);border-radius:3px">
+            <div style="font-family:'Orbitron',monospace;font-size:11px;color:var(--lorawan);letter-spacing:2px;margin-bottom:4px">CLASS A — ALL</div>
+            <p style="font-size:12px;color:var(--muted)">Two RX windows after each uplink. Most power-efficient. Default for sensors.</p>
+          </div>
+          <div style="padding:14px;background:rgba(255,157,0,0.05);border:1px solid rgba(255,157,0,0.2);border-radius:3px">
+            <div style="font-family:'Orbitron',monospace;font-size:11px;color:var(--lorawan);letter-spacing:2px;margin-bottom:4px">CLASS B — BEACON</div>
+            <p style="font-size:12px;color:var(--muted)">Adds scheduled downlink windows via gateway beacons. Predictable latency.</p>
+          </div>
+          <div style="padding:14px;background:rgba(255,157,0,0.05);border:1px solid rgba(255,157,0,0.2);border-radius:3px">
+            <div style="font-family:'Orbitron',monospace;font-size:11px;color:var(--lorawan);letter-spacing:2px;margin-bottom:4px">CLASS C — CONTINUOUS</div>
+            <p style="font-size:12px;color:var(--muted)">Always listening. Lowest downlink latency. Highest power draw. For actuators.</p>
+          </div>
+        </div>
+      </div>
+      <div class="proto-card">
+        <h4 style="color:var(--lorawan)">Activation Methods</h4>
+        <div style="margin-bottom:16px;padding:14px;background:rgba(255,157,0,0.05);border:1px solid rgba(255,157,0,0.2);border-radius:3px">
+          <div style="font-family:'Orbitron',monospace;font-size:11px;color:var(--lorawan);letter-spacing:2px;margin-bottom:4px">OTAA — Over-the-Air</div>
+          <p style="font-size:12px;color:var(--muted)">Secure join procedure. Session keys dynamically derived. <strong style="color:var(--mqtt)">Preferred method.</strong></p>
+        </div>
+        <div style="padding:14px;background:rgba(255,61,110,0.05);border:1px solid rgba(255,61,110,0.2);border-radius:3px">
+          <div style="font-family:'Orbitron',monospace;font-size:11px;color:var(--alert);letter-spacing:2px;margin-bottom:4px">ABP — By Personalization</div>
+          <p style="font-size:12px;color:var(--muted)">Static keys pre-flashed. Lower security. Avoid for production.</p>
+        </div>
+        <div style="margin-top:16px">
+          <h4 style="color:var(--lorawan);margin-bottom:10px">Security Keys (AES-128)</h4>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:12px;line-height:2;color:var(--muted)">
+            <div><span style="color:var(--lora)">NwkSKey</span> → Network Session Key (MIC + MAC cmds)</div>
+            <div><span style="color:var(--mqtt)">AppSKey</span> → App Session Key (payload encrypt)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MQTT TAB -->
+    <div class="tab-content" id="tab-mqtt">
+      <div class="proto-card">
+        <h4 style="color:var(--mqtt)">QoS Levels</h4>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="padding:14px;background:rgba(57,255,110,0.05);border:1px solid rgba(57,255,110,0.15);border-radius:3px">
+            <div style="font-family:'Orbitron',monospace;font-size:11px;color:var(--mqtt);letter-spacing:2px;margin-bottom:4px">QoS 0 — At Most Once</div>
+            <p style="font-size:12px;color:var(--muted)">Fire-and-forget. No ACK. Use for non-critical telemetry.</p>
+          </div>
+          <div style="padding:14px;background:rgba(57,255,110,0.05);border:1px solid rgba(57,255,110,0.15);border-radius:3px">
+            <div style="font-family:'Orbitron',monospace;font-size:11px;color:var(--mqtt);letter-spacing:2px;margin-bottom:4px">QoS 1 — At Least Once</div>
+            <p style="font-size:12px;color:var(--muted)">Guaranteed delivery, duplicates possible. Use for sensor readings.</p>
+          </div>
+          <div style="padding:14px;background:rgba(57,255,110,0.05);border:1px solid rgba(57,255,110,0.15);border-radius:3px">
+            <div style="font-family:'Orbitron',monospace;font-size:11px;color:var(--mqtt);letter-spacing:2px;margin-bottom:4px">QoS 2 — Exactly Once</div>
+            <p style="font-size:12px;color:var(--muted)">4-way handshake. No loss or dup. Use for critical commands.</p>
+          </div>
+        </div>
+      </div>
+      <div class="proto-card">
+        <h4 style="color:var(--mqtt)">Topic Structure</h4>
+        <div class="topic-tree">
+          <div class="topic-root">home/</div>
+          <div class="topic-branch">kitchen/</div>
+          <div class="topic-leaf">gas_sensor/data <span>→ {"gas": 650, "temp": 28}</span></div>
+          <div class="topic-leaf">gas_sensor/status <span>→ "NORMAL"</span></div>
+          <div class="topic-leaf">gas_sensor/cmd/open_window</div>
+          <div class="topic-branch">outdoor/</div>
+          <div class="topic-leaf">air_quality/pm25 <span>→ {"value": 12.4}</span></div>
+          <div class="topic-leaf">air_quality/alert</div>
+        </div>
+        <div style="margin-top:16px">
+          <h4 style="color:var(--mqtt);margin-bottom:8px">Key Features</h4>
+          <ul class="pro-con-list pros">
+            <li>Last Will &amp; Testament (LWT) — disconnection alerts</li>
+            <li>Retained messages — new subscribers get latest value</li>
+            <li>Pub/Sub decouples producers from consumers</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LIVE DASHBOARD -->
+<section id="dashboard" class="section">
+  <div class="container">
+    <div class="section-header">
+      <p class="section-tag">// SIMULATED LIVE DATA — MQTT STREAM</p>
+      <h2 class="section-title">Node Dashboard</h2>
+    </div>
+    <div class="dash-grid">
+      <div class="dash-card">
+        <div class="dash-title"><div class="live-dot"></div>GAS CONCENTRATION</div>
+        <div class="big-value" id="gasVal" style="color:var(--lora)">—</div>
+        <div class="big-unit">ppm</div>
+        <div id="gasStatus" class="status-badge status-ok">NORMAL</div>
+        <div class="mini-chart" id="gasChart"></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-title"><div class="live-dot" style="background:var(--lorawan)"></div>TEMPERATURE</div>
+        <div class="big-value" id="tempVal" style="color:var(--lorawan);font-size:36px">—</div>
+        <div class="big-unit">°C</div>
+        <div class="small-label" style="margin-top:10px">DHT11 Sensor</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-title"><div class="live-dot"></div>HUMIDITY</div>
+        <div class="big-value" id="humVal" style="color:var(--mqtt);font-size:36px">—</div>
+        <div class="big-unit">%RH</div>
+        <div class="small-label" style="margin-top:10px">DHT11 Sensor</div>
+      </div>
+    </div>
+    <div class="dash-grid" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="dash-card">
+        <div class="dash-title">SPREADING FACTOR</div>
+        <div class="big-value" id="sfVal" style="color:var(--lora);font-size:36px">SF9</div>
+        <div class="small-label">ADR Managed · 3.9 kbps</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-title">SIGNAL STRENGTH (RSSI)</div>
+        <div class="big-value" id="rssiVal" style="color:var(--lorawan);font-size:36px">—</div>
+        <div class="big-unit">dBm</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-title">MQTT TOPIC</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--mqtt);line-height:2;margin-top:8px">
+          home/kitchen/<br>gas_sensor/<span style="color:var(--lora)">data</span>
+        </div>
+        <div class="small-label">QoS 1 · Retained</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:20px">
+      <button onclick="toggleLive()" id="liveBtn" style="
+        font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;
+        padding:12px 32px;background:transparent;border:1px solid var(--lora);
+        color:var(--lora);cursor:pointer;transition:all 0.3s;
+      " onmouseover="this.style.background='rgba(0,229,255,0.1)'" onmouseout="this.style.background='transparent'">
+        ⏸ PAUSE STREAM
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- PACKET TRACKER -->
+<section id="tracker" class="section">
+  <div class="container">
+    <div class="section-header">
+      <p class="section-tag">// TASK 8 — DATA TRANSMISSION</p>
+      <h2 class="section-title">Uplink Data Flow</h2>
+    </div>
+    <div class="tracker-flow" id="trackerFlow">
+      <!-- Steps injected by JS -->
+    </div>
+    <div style="text-align:center;margin-top:20px">
+      <button onclick="animateFlow()" style="
+        font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;
+        padding:12px 32px;background:transparent;border:1px solid var(--mqtt);
+        color:var(--mqtt);cursor:pointer;transition:all 0.3s;
+      " onmouseover="this.style.background='rgba(57,255,110,0.1)'" onmouseout="this.style.background='transparent'">
+        ▶ REPLAY PACKET JOURNEY
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- BOTTLENECKS -->
+<section id="bottlenecks" class="section">
+  <div class="container">
+    <div class="section-header">
+      <p class="section-tag">// TASK 7 — PERFORMANCE ANALYSIS</p>
+      <h2 class="section-title">Bottleneck Analysis &amp; Solutions</h2>
+    </div>
+    <div class="bottleneck-grid">
+      <div class="bneck-card">
+        <div class="bneck-num">01</div>
+        <h4>LoRa Duty-Cycle Limit</h4>
+        <p>Unlicensed sub-GHz bands impose ~1% duty-cycle restrictions in Europe, capping transmission frequency. Interference from co-channel devices degrades link quality.</p>
+        <div class="bneck-solution">
+          <div class="bneck-solution-label">SOLUTION</div>
+          <p>Use ADR to minimize SF. Switch to event-driven reporting. Minimize payload with binary encoding.</p>
+        </div>
+      </div>
+      <div class="bneck-card">
+        <div class="bneck-num">02</div>
+        <h4>Gateway &amp; NS Congestion</h4>
+        <p>A single gateway has finite simultaneous-packet capacity. High SF usage increases time-on-air, crowding out other transmissions. Network Server can be overwhelmed at scale.</p>
+        <div class="bneck-solution">
+          <div class="bneck-solution-label">SOLUTION</div>
+          <p>Deploy overlapping gateways. Use Class A devices. Load-balance NS across multiple instances. Minimize downlinks.</p>
+        </div>
+      </div>
+      <div class="bneck-card">
+        <div class="bneck-num">03</div>
+        <h4>MQTT Broker Overload</h4>
+        <p>High device count with frequent publishes can saturate a single broker's CPU, memory, and bandwidth — especially with high fan-out to many subscribers.</p>
+        <div class="bneck-solution">
+          <div class="bneck-solution-label">SOLUTION</div>
+          <p>Cluster brokers (HiveMQ, EMQ X, AWS IoT Core). Use QoS 0 for non-critical data. Apply broker-side rule engines to filter before fan-out.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">IoT // LoRa · LoRaWAN · MQTT</div>
+  <p class="footer-sub">Technical Report · April 2026 · End-to-End IoT Communication System</p>
+  <p style="margin-top:12px;font-size:12px;color:var(--muted)">
+    References: Semtech · LoRa Alliance · OASIS MQTT Spec
+  </p>
+</footer>
+
+<script>
+/* ========== NODE DETAILS ========== */
+const nodeData = {
+  sensor: {
+    title: '📡 End Device / IoT Sensor Node',
+    body: 'The primary data collection unit. Typically an ESP32 or similar MCU paired with a LoRa transceiver (e.g., SX1276/SX1278). Carries sensors such as MQ-2 (gas), DHT11 (temp/humidity), or GPS. Responsible for data acquisition, local processing, AES-128 encryption using AppSKey, and transmission via LoRa CSS modulation on 433/868/915 MHz bands.'
+  },
+  gateway: {
+    title: '🗼 LoRa Gateway',
+    body: 'A transparent bridge that demodulates LoRa radio packets and re-encapsulates them as UDP/IP packets sent to the Network Server over Ethernet, Wi-Fi, or cellular. Supports simultaneous reception on multiple channels and spreading factors. Does not decrypt application data — it is a pure protocol converter.'
+  },
+  ns: {
+    title: '🌐 LoRaWAN Network Server',
+    body: 'The central intelligence of the LoRaWAN network. Handles de-duplication of uplink packets received by multiple gateways, validates Message Integrity Codes (MIC) using NwkSKey, manages device addressing (DevAddr), performs Adaptive Data Rate (ADR) optimization, and routes decrypted MAC payload to the correct Application Server.'
+  },
+  as: {
+    title: '⚙️ Application Server',
+    body: 'Handles the application-level payload. Receives the encrypted FRMPayload from the Network Server, decrypts it using the AppSKey (AES-128 CTR mode), decodes binary data back into human-readable JSON, applies business logic, and publishes the result to the MQTT Broker on topic paths like `home/kitchen/gas_sensor/data`.'
+  },
+  broker: {
+    title: '🔀 MQTT Broker',
+    body: 'Central message router operating on the publish/subscribe pattern. Decouples data producers (Application Server) from consumers (dashboards, mobile apps). Supports three QoS levels for delivery guarantees, Last Will & Testament (LWT) for disconnection detection, and retained messages so new subscribers get the latest value immediately.'
+  },
+  cloud: {
+    title: '☁️ Cloud Platform / Dashboard',
+    body: 'Subscribing applications receive JSON payloads via MQTT topics. These include real-time monitoring dashboards (e.g., Node-RED, Grafana), mobile apps with push alerts, analytics platforms for historical trending, and actuator control services that publish downlink commands back through the MQTT → Application Server → Network Server → Gateway → End Device path.'
+  }
+};
+
+function selectNode(el, key) {
+  document.querySelectorAll('.arch-node').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('detailTitle').textContent = nodeData[key].title;
+  document.getElementById('detailBody').textContent = nodeData[key].body;
+  const d = document.getElementById('nodeDetail');
+  d.classList.add('show');
+  d.style.display = 'block';
+}
+
+/* ========== OSI LAYERS ========== */
+const osiLayers = [
+  { num: 7, name: 'Application', sub: 'MQTT / JSON', protoClass: 'proto-mqtt', brief: 'MQTT pub/sub, topic structure, JSON payloads, dashboard visualization', detail: 'MQTT runs on top of TCP/IP and provides a lightweight pub/sub messaging model. The Application Server publishes sensor data to structured topics (e.g., home/kitchen/gas_sensor/data). Cloud dashboards and mobile apps subscribe to these topics. MQTT supports QoS 0/1/2, retained messages, and Last Will & Testament notifications for disconnected clients.' },
+  { num: 6, name: 'Presentation', sub: 'AES-128 · JSON', protoClass: 'proto-lora', brief: 'Data encoding/decoding and AES-128 dual-layer encryption', detail: 'Sensor readings are encoded into compact binary format on the end device (e.g., 2 bytes for gas PPM) to minimize payload size. The AppSKey encrypts the application payload; the NwkSKey protects MAC commands and ensures integrity via MIC. The Application Server reverses this: decrypts then decodes binary back to JSON.' },
+  { num: 5, name: 'Session', sub: 'OTAA / ABP', protoClass: 'proto-lorawan', brief: 'Device activation and session key management (NwkSKey, AppSKey)', detail: 'LoRaWAN handles session management through device activation. OTAA (Over-the-Air Activation) performs a secure join procedure with the Join Server to derive session keys. ABP (Activation by Personalization) uses static pre-programmed keys (less secure). Two 128-bit AES keys — NwkSKey and AppSKey — are established per session.' },
+  { num: 4, name: 'Transport', sub: 'UDP / TCP', protoClass: 'proto-ip', brief: 'UDP for gateway↔NS backhaul; TCP for MQTT broker connections', detail: 'Between the LoRa Gateway and Network Server, UDP is used for low-overhead, high-speed packet forwarding. Between the Application Server/clients and MQTT Broker, TCP provides reliable transport. LoRaWAN handles its own application-level reliability through confirmed uplinks (ACK) and MQTT QoS levels for end-to-end delivery guarantees.' },
+  { num: 3, name: 'Network', sub: 'IP / LoRaWAN NS', protoClass: 'proto-lorawan', brief: 'IP routing for backhaul; LoRaWAN NS for end-device addressing', detail: 'The LoRaWAN Network Server acts as the Layer 3 equivalent for the LoRa network. It uses DevAddr (32-bit device address) for routing and de-duplicates packets received from multiple gateways. It also manages Adaptive Data Rate (ADR), instructing devices to adjust spreading factor and TX power based on observed link quality.' },
+  { num: 2, name: 'Data Link', sub: 'LoRaWAN MAC', protoClass: 'proto-lorawan', brief: 'LoRaWAN MAC: frame structure, device classes, channel access', detail: 'LoRaWAN defines the MAC layer on top of LoRa. A frame contains: MHDR (1B) + FHdr (DevAddr 4B, FCtrl 1B, FCnt 2B, FOpts) + FPort (1B) + FRMPayload + MIC (4B). Class A devices use two RX windows after each uplink. Class B adds beacon-synchronized windows. Class C listens continuously.' },
+  { num: 1, name: 'Physical', sub: 'LoRa (CSS)', protoClass: 'proto-lora', brief: 'Chirp Spread Spectrum modulation on 433/868/915 MHz sub-GHz bands', detail: 'LoRa uses Chirp Spread Spectrum (CSS) modulation derived from Semtech\'s proprietary technique. Data is encoded using wideband linear frequency-modulated chirps (SF7–SF12). Higher SF = longer range, lower data rate. Operates in unlicensed sub-GHz bands (868 MHz EU, 915 MHz US/AU, 433 MHz Asia). Achieves up to 15–20 km rural range at extremely low power.' }
+];
+
+const grid = document.getElementById('osiGrid');
+osiLayers.forEach((l, i) => {
+  const row = document.createElement('div');
+  row.className = 'osi-layer';
+  row.innerHTML = `
+    <div class="osi-num">${l.num}</div>
+    <div class="osi-name">
+      <strong>${l.name}</strong>
+      <span class="osi-proto ${l.protoClass}">${l.sub}</span>
+    </div>
+    <div class="osi-detail">${l.brief}</div>
+  `;
+  const expand = document.createElement('div');
+  expand.className = 'osi-expand';
+  expand.id = `osi-exp-${i}`;
+  expand.textContent = l.detail;
+
+  row.onclick = () => {
+    const isActive = row.classList.contains('active');
+    document.querySelectorAll('.osi-layer').forEach(r => r.classList.remove('active'));
+    document.querySelectorAll('.osi-expand').forEach(e => e.classList.remove('show'));
+    if (!isActive) {
+      row.classList.add('active');
+      expand.classList.add('show');
+    }
+  };
+  grid.appendChild(row);
+  grid.appendChild(expand);
+});
+
+/* ========== TABS ========== */
+function switchTab(name, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.className = 'tab');
+  document.getElementById('tab-' + name).classList.add('active');
+  el.className = 'tab active-' + name;
+}
+
+/* ========== SF VISUALIZER ========== */
+const sfContainer = document.getElementById('sfSlider');
+const sfs = [7,8,9,10,11,12];
+sfs.forEach(sf => {
+  const h = ((sf - 6) / 6) * 36 + 4;
+  const b = document.createElement('div');
+  b.className = 'bar';
+  b.style.cssText = `height:${h}px;background:var(--lora);opacity:${0.3 + (sf-7)*0.14};flex:1;border-radius:1px 1px 0 0;`;
+  b.title = `SF${sf}`;
+  sfContainer.appendChild(b);
+  const l = document.createElement('div');
+  l.style.cssText = 'font-family:"Share Tech Mono",monospace;font-size:9px;color:var(--muted);text-align:center;margin-top:4px';
+  l.textContent = `SF${sf}`;
+  // not appending label to keep it simple
+});
+
+/* ========== LIVE DASHBOARD ========== */
+let liveRunning = true;
+let liveTimer;
+let gasHistory = [];
+
+function randBetween(a, b) { return Math.round(a + Math.random() * (b - a)); }
+
+function updateDash() {
+  const gas = randBetween(300, 900);
+  const temp = (20 + Math.random() * 12).toFixed(1);
+  const hum = randBetween(35, 75);
+  const rssi = randBetween(-120, -60);
+  const sfs = ['SF7','SF8','SF9','SF10','SF11','SF12'];
+  const sf = sfs[randBetween(0, sfs.length - 1)];
+
+  document.getElementById('gasVal').textContent = gas;
+  document.getElementById('tempVal').textContent = temp;
+  document.getElementById('humVal').textContent = hum;
+  document.getElementById('rssiVal').textContent = rssi;
+  document.getElementById('sfVal').textContent = sf;
+
+  const statusEl = document.getElementById('gasStatus');
+  if (gas < 500) {
+    statusEl.textContent = 'NORMAL';
+    statusEl.className = 'status-badge status-ok';
+    document.getElementById('gasVal').style.color = 'var(--lora)';
+  } else if (gas < 700) {
+    statusEl.textContent = 'WARNING';
+    statusEl.className = 'status-badge status-warn';
+    document.getElementById('gasVal').style.color = 'var(--lorawan)';
+  } else {
+    statusEl.textContent = '⚠ CRITICAL';
+    statusEl.className = 'status-badge status-crit';
+    document.getElementById('gasVal').style.color = 'var(--alert)';
+  }
+
+  gasHistory.push(gas);
+  if (gasHistory.length > 12) gasHistory.shift();
+  const chartEl = document.getElementById('gasChart');
+  chartEl.innerHTML = '';
+  const maxH = 60;
+  const maxG = Math.max(...gasHistory, 1);
+  gasHistory.forEach((g, i) => {
+    const bar = document.createElement('div');
+    const h = Math.max(4, (g / maxG) * maxH);
+    const color = g > 700 ? 'var(--alert)' : g > 500 ? 'var(--lorawan)' : 'var(--lora)';
+    bar.style.cssText = `flex:1;height:${h}px;background:${color};opacity:0.7;border-radius:1px 1px 0 0;transition:height 0.5s;`;
+    chartEl.appendChild(bar);
+  });
+}
+
+function startLive() {
+  updateDash();
+  liveTimer = setInterval(updateDash, 2000);
+}
+function toggleLive() {
+  const btn = document.getElementById('liveBtn');
+  if (liveRunning) {
+    clearInterval(liveTimer);
+    liveRunning = false;
+    btn.textContent = '▶ RESUME STREAM';
+    btn.style.borderColor = 'var(--mqtt)';
+    btn.style.color = 'var(--mqtt)';
+  } else {
+    startLive();
+    liveRunning = true;
+    btn.textContent = '⏸ PAUSE STREAM';
+    btn.style.borderColor = 'var(--lora)';
+    btn.style.color = 'var(--lora)';
+  }
+}
+startLive();
+
+/* ========== PACKET TRACKER ========== */
+const flowSteps = [
+  { icon: '📡', name: 'Sensor Node', body: 'MQ-2 reads 650 ppm gas. DHT11 reads 28°C. Data encoded as binary: <code>0x028A 0x01C</code>. Encrypted with <code>AppSKey (AES-128)</code>. MIC calculated with <code>NwkSKey</code>.', status: 'TX', statusClass: 'step-ok' },
+  { icon: '📻', name: 'LoRa PHY', body: 'LoRaWAN frame passed to SX1278 transceiver. Chirp Spread Spectrum modulation applied at <code>SF9 / BW125</code>. Transmitted on <code>868.1 MHz</code> at –14 dBm TX power.', status: 'RF', statusClass: 'step-ok' },
+  { icon: '🗼', name: 'LoRa Gateway', body: 'Gateway receives LoRa radio signal (RSSI: –85 dBm, SNR: +8 dB). Demodulates chirps → extracts LoRaWAN frame. Wraps in UDP packet → forwards to Network Server over Ethernet.', status: 'FWD', statusClass: 'step-proc' },
+  { icon: '🌐', name: 'Network Server', body: 'Receives UDP packet. <code>De-duplicates</code> (if received by multiple gateways). Validates MIC using <code>NwkSKey</code>. Performs ADR calculations. Routes encrypted payload to Application Server.', status: 'PROC', statusClass: 'step-proc' },
+  { icon: '⚙️', name: 'App Server', body: 'Decrypts <code>FRMPayload</code> using <code>AppSKey</code>. Decodes binary → JSON: <code>{"gas":650,"temp":28,"hum":55}</code>. Validates thresholds. Status = "WARNING".', status: 'DECODE', statusClass: 'step-proc' },
+  { icon: '🔀', name: 'MQTT Broker', body: 'App Server publishes JSON to topic <code>home/kitchen/gas_sensor/data</code> with <code>QoS 1</code>. Broker stores retained message. PUBACK returned to publisher.', status: 'PUB', statusClass: 'step-ok' },
+  { icon: '☁️', name: 'Dashboard', body: 'All subscribers receive the payload. Dashboard updates gas chart in real-time. Alert engine triggers SMS notification. Analytics platform appends data point to time-series DB.', status: 'RX', statusClass: 'step-ok' }
+];
+
+const trackerDiv = document.getElementById('trackerFlow');
+flowSteps.forEach((s, i) => {
+  const row = document.createElement('div');
+  row.className = 'flow-step';
+  row.id = `fstep-${i}`;
+  row.innerHTML = `
+    <div class="step-source">
+      <div class="step-icon">${s.icon}</div>
+      <div class="step-name">${s.name}</div>
+    </div>
+    <div class="step-body">${s.body}</div>
+    <div class="step-status ${s.statusClass}">${s.status}</div>
+  `;
+  trackerDiv.appendChild(row);
+});
+
+function animateFlow() {
+  document.querySelectorAll('.flow-step').forEach(s => s.classList.remove('active-step'));
+  let i = 0;
+  const next = () => {
+    if (i < flowSteps.length) {
+      document.getElementById(`fstep-${i}`).classList.add('active-step');
+      document.getElementById(`fstep-${i}`).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      i++;
+      setTimeout(next, 600);
+    }
+  };
+  next();
+}
+animateFlow();
+</script>
+</body>
+</html>
